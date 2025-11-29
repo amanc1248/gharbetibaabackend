@@ -34,8 +34,8 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: {
-      values: ['tenant', 'owner', 'both'],
-      message: 'Role must be either tenant, owner, or both'
+      values: ['tenant', 'owner'],
+      message: 'Role must be either tenant or owner'
     },
     default: 'tenant'
   },
