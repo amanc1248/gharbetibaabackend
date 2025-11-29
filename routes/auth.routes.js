@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  phoneAuth,
   signup,
   signin,
   getMe,
@@ -18,6 +19,13 @@ const {
 // ====================================
 // PUBLIC ROUTES
 // ====================================
+
+/**
+ * @route   POST /api/auth/phone
+ * @desc    Phone Auth - Auto Login/Register
+ * @access  Public
+ */
+router.post('/phone', phoneAuth);
 
 /**
  * @route   POST /api/auth/signup

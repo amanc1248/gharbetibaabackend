@@ -14,6 +14,97 @@ const generateToken = (id) => {
 };
 
 /**
+ * @desc    Phone Auth - Auto Login/Register
+ * @route   POST /api/auth/phone
+ * @access  Public
+ */
+exports.phoneAuth = asyncHandler(async (req, res) => {
+  const { phone, name, role } = req.body;
+
+  console.log('📱 Phone auth request:', { phone, name, role });
+
+  // Validate required fields
+  if (!phone) {
+    return res.status(400).json({
+      success: false,
+      message: 'Phone number is required'
+    });
+  }
+
+  // Check if user exists with this phone number
+  let user = await User.findOne({ phone });
+
+  if (user) {
+    // User exists - LOGIN
+    console.log('📱 User found - logging in');
+    
+    // Check if account is active
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact support.'
+      });
+    }
+
+    // Update last login
+    await user.updateLastLogin();
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      isNewUser: false,
+      token,
+      user: user.getPublicProfile()
+    });
+  } else {
+    // User doesn't exist - REGISTER
+    console.log('📱 New user - registering');
+
+    // Validate required fields for registration
+    if (!name || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and role are required for new users'
+      });
+    }
+
+    // Generate email from phone if not provided
+    const email = `${phone.replace(/\+/g, '')}@gharbeti.app`;
+    
+    // Use phone as password (hashed by model)
+    const password = phone;
+
+    // Create new user
+    user = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: role || 'tenant'
+    });
+
+    console.log('📱 New user created:', user.phone);
+
+    // Update last login
+    await user.updateLastLogin();
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully',
+      isNewUser: true,
+      token,
+      user: user.getPublicProfile()
+    });
+  }
+});
+
+/**
  * @desc    Register new user
  * @route   POST /api/auth/signup
  * @access  Public
