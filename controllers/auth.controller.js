@@ -19,7 +19,9 @@ const generateToken = (id) => {
  * @access  Public
  */
 exports.signup = asyncHandler(async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone } = req.body;
+
+  console.log('📱 Signup request body:', { name, email, role, phone });
 
   // Check if user already exists
   const existingUser = await User.findOne({ email });
@@ -31,13 +33,21 @@ exports.signup = asyncHandler(async (req, res) => {
     });
   }
 
-  // Create user
-  const user = await User.create({
+  // Create user with phone
+  const userData = {
     name,
     email,
     password,
     role: role || 'tenant'
-  });
+  };
+  
+  // Add phone if provided
+  if (phone) {
+    userData.phone = phone;
+  }
+
+  const user = await User.create(userData);
+  console.log('📱 Created user with phone:', user.phone);
 
   // Generate token
   const token = generateToken(user._id);
