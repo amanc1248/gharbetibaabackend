@@ -10,6 +10,7 @@ const { uploadMultipleImages, deleteMultipleImages } = require('../utils/imageUp
  */
 exports.getProperties = asyncHandler(async (req, res) => {
   const {
+    search,
     city,
     area,
     minRent,
@@ -30,6 +31,11 @@ exports.getProperties = asyncHandler(async (req, res) => {
     filter.status = status;
   } else {
     filter.status = 'available';
+  }
+
+  // Text search (title, description, location)
+  if (search && search.trim()) {
+    filter.$text = { $search: search.trim() };
   }
 
   // Location filters
@@ -63,9 +69,18 @@ exports.getProperties = asyncHandler(async (req, res) => {
   // Pagination
   const skip = (page - 1) * limit;
 
+  // Build query
+  let query = Property.find(filter);
+
+  // If text search, sort by relevance score
+  if (search && search.trim()) {
+    query = query.select({ score: { $meta: 'textScore' } }).sort({ score: { $meta: 'textScore' } });
+  } else {
+    query = query.sort(sort);
+  }
+
   // Execute query with pagination
-  const properties = await Property.find(filter)
-    .sort(sort)
+  const properties = await query
     .skip(skip)
     .limit(parseInt(limit))
     .populate('owner', 'name phone photoURL rating totalRatings isVerified');

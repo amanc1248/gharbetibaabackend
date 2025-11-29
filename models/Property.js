@@ -409,6 +409,17 @@ propertySchema.statics.getByCity = function(city, limit = 20) {
 };
 
 // ====================================
+// TEXT SEARCH INDEX
+// ====================================
+// Create text index for searching by title and description
+propertySchema.index({ 
+  title: 'text', 
+  description: 'text',
+  'location.area': 'text',
+  'location.fullAddress': 'text'
+});
+
+// ====================================
 // EXPORT MODEL
 // ====================================
 module.exports = mongoose.model('Property', propertySchema);
