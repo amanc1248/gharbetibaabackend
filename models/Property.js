@@ -8,7 +8,7 @@ const propertySchema = new mongoose.Schema({
     required: [true, 'Property must have an owner'],
     index: true
   },
-  
+
   // Basic Information
   title: {
     type: String,
@@ -17,13 +17,13 @@ const propertySchema = new mongoose.Schema({
     minlength: [5, 'Title must be at least 5 characters'],
     maxlength: [100, 'Title cannot exceed 100 characters']
   },
-  
+
   description: {
     type: String,
     trim: true,
     maxlength: [2000, 'Description cannot exceed 2000 characters']
   },
-  
+
   propertyType: {
     type: String,
     required: [true, 'Please specify property type'],
@@ -33,7 +33,7 @@ const propertySchema = new mongoose.Schema({
     },
     index: true
   },
-  
+
   // Location Details
   location: {
     city: {
@@ -57,11 +57,11 @@ const propertySchema = new mongoose.Schema({
       trim: true
     },
     coordinates: {
-      latitude: Number,
-      longitude: Number
+      type: [Number], // [longitude, latitude]
+      index: '2dsphere'
     }
   },
-  
+
   // Pricing Information
   rent: {
     type: Number,
@@ -69,58 +69,58 @@ const propertySchema = new mongoose.Schema({
     min: [0, 'Rent cannot be negative'],
     index: true
   },
-  
+
   securityDeposit: {
     type: Number,
     min: [0, 'Security deposit cannot be negative'],
     default: 0
   },
-  
+
   negotiable: {
     type: Boolean,
     default: false
   },
-  
+
   electricityIncluded: {
     type: Boolean,
     default: false
   },
-  
+
   waterIncluded: {
     type: Boolean,
     default: false
   },
-  
+
   // Property Details
   numberOfRooms: {
     type: Number,
     min: [0, 'Number of rooms cannot be negative']
   },
-  
+
   numberOfBathrooms: {
     type: Number,
     min: [0, 'Number of bathrooms cannot be negative']
   },
-  
+
   numberOfFloors: {
     type: Number,
     min: [1, 'Number of floors must be at least 1']
   },
-  
+
   floorNumber: {
     type: Number
   },
-  
+
   size: {
     type: Number, // in square feet
     min: [0, 'Size cannot be negative']
   },
-  
+
   facing: {
     type: String,
     enum: ['north', 'south', 'east', 'west', 'north-east', 'north-west', 'south-east', 'south-west']
   },
-  
+
   // Amenities
   amenities: {
     water24x7: { type: Boolean, default: false },
@@ -140,47 +140,47 @@ const propertySchema = new mongoose.Schema({
     generator: { type: Boolean, default: false },
     solarPanel: { type: Boolean, default: false }
   },
-  
+
   // Tenant Preferences
   petFriendly: {
     type: Boolean,
     default: false
   },
-  
+
   bachelorsAllowed: {
     type: Boolean,
     default: true
   },
-  
+
   familyOnly: {
     type: Boolean,
     default: false
   },
-  
+
   // Media
   images: {
     type: [String],
     required: [true, 'Please provide at least one image'],
     validate: {
-      validator: function(arr) {
+      validator: function (arr) {
         return arr.length >= 1 && arr.length <= 10;
       },
       message: 'Property must have between 1 and 10 images'
     }
   },
-  
+
   // Availability
   availableFrom: {
     type: Date,
     default: Date.now
   },
-  
+
   minimumStayMonths: {
     type: Number,
     default: 1,
     min: [1, 'Minimum stay must be at least 1 month']
   },
-  
+
   status: {
     type: String,
     enum: {
@@ -190,66 +190,66 @@ const propertySchema = new mongoose.Schema({
     default: 'available',
     index: true
   },
-  
+
   isActive: {
     type: Boolean,
     default: true,
     index: true
   },
-  
+
   // Engagement Metrics
   views: {
     type: Number,
     default: 0,
     index: true
   },
-  
+
   totalFavorites: {
     type: Number,
     default: 0
   },
-  
+
   clicksOnCall: {
     type: Number,
     default: 0
   },
-  
+
   // Verification
   isVerified: {
     type: Boolean,
     default: false
   },
-  
+
   verifiedAt: {
     type: Date
   },
-  
+
   // Premium Features
   isPremium: {
     type: Boolean,
     default: false,
     index: true
   },
-  
+
   premiumExpiry: {
     type: Date
   },
-  
+
   isFeatured: {
     type: Boolean,
     default: false,
     index: true
   },
-  
+
   // Listing Expiry
   expiresAt: {
     type: Date,
-    default: function() {
+    default: function () {
       // Default expiry: 90 days from now
       return new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     }
   }
-  
+
 }, {
   timestamps: true // Adds createdAt and updatedAt
 });
@@ -258,6 +258,7 @@ const propertySchema = new mongoose.Schema({
 // INDEXES
 // ====================================
 propertySchema.index({ 'location.city': 1, 'location.area': 1 });
+// propertySchema.index({ 'location.coordinates': '2dsphere' }); // Defined in schema path
 propertySchema.index({ rent: 1 });
 propertySchema.index({ status: 1, isActive: 1 });
 propertySchema.index({ createdAt: -1 });
@@ -279,7 +280,7 @@ propertySchema.index({
 /**
  * Get monthly cost (rent + utilities if not included)
  */
-propertySchema.virtual('monthlyCost').get(function() {
+propertySchema.virtual('monthlyCost').get(function () {
   let cost = this.rent;
   // You can add additional costs here if needed
   return cost;
@@ -288,7 +289,7 @@ propertySchema.virtual('monthlyCost').get(function() {
 /**
  * Check if property is featured or premium
  */
-propertySchema.virtual('isHighlighted').get(function() {
+propertySchema.virtual('isHighlighted').get(function () {
   return this.isPremium || this.isFeatured;
 });
 
@@ -299,7 +300,7 @@ propertySchema.virtual('isHighlighted').get(function() {
 /**
  * Populate owner details when querying
  */
-propertySchema.pre(/^find/, function(next) {
+propertySchema.pre(/^find/, function (next) {
   this.populate({
     path: 'owner',
     select: 'name email phone photoURL rating totalRatings isVerified'
@@ -310,15 +311,15 @@ propertySchema.pre(/^find/, function(next) {
 /**
  * Check and update premium/featured status based on expiry
  */
-propertySchema.pre('save', function(next) {
+propertySchema.pre('save', function (next) {
   const now = new Date();
-  
+
   // Check if premium has expired
   if (this.isPremium && this.premiumExpiry && this.premiumExpiry < now) {
     this.isPremium = false;
     this.isFeatured = false;
   }
-  
+
   next();
 });
 
@@ -329,7 +330,7 @@ propertySchema.pre('save', function(next) {
 /**
  * Increment view count
  */
-propertySchema.methods.incrementViews = async function() {
+propertySchema.methods.incrementViews = async function () {
   this.views += 1;
   await this.save({ validateBeforeSave: false });
 };
@@ -337,7 +338,7 @@ propertySchema.methods.incrementViews = async function() {
 /**
  * Increment call click count
  */
-propertySchema.methods.incrementCallClicks = async function() {
+propertySchema.methods.incrementCallClicks = async function () {
   this.clicksOnCall += 1;
   await this.save({ validateBeforeSave: false });
 };
@@ -345,14 +346,14 @@ propertySchema.methods.incrementCallClicks = async function() {
 /**
  * Check if property is expired
  */
-propertySchema.methods.isExpired = function() {
+propertySchema.methods.isExpired = function () {
   return this.expiresAt < new Date();
 };
 
 /**
  * Get property summary (for lists)
  */
-propertySchema.methods.getSummary = function() {
+propertySchema.methods.getSummary = function () {
   return {
     id: this._id,
     title: this.title,
@@ -382,7 +383,7 @@ propertySchema.methods.getSummary = function() {
  * @param {number} limit - Number of properties to return
  * @returns {Promise<Array>} Array of featured properties
  */
-propertySchema.statics.getFeatured = function(limit = 10) {
+propertySchema.statics.getFeatured = function (limit = 10) {
   return this.find({
     isActive: true,
     status: 'available',
@@ -398,7 +399,7 @@ propertySchema.statics.getFeatured = function(limit = 10) {
  * @param {number} limit - Number of properties to return
  * @returns {Promise<Array>} Array of properties
  */
-propertySchema.statics.getByCity = function(city, limit = 20) {
+propertySchema.statics.getByCity = function (city, limit = 20) {
   return this.find({
     'location.city': city,
     isActive: true,
@@ -412,8 +413,8 @@ propertySchema.statics.getByCity = function(city, limit = 20) {
 // TEXT SEARCH INDEX
 // ====================================
 // Create text index for searching by title and description
-propertySchema.index({ 
-  title: 'text', 
+propertySchema.index({
+  title: 'text',
   description: 'text',
   'location.area': 'text',
   'location.fullAddress': 'text'

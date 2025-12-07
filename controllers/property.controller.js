@@ -25,7 +25,7 @@ exports.getProperties = asyncHandler(async (req, res) => {
 
   // Build filter object
   const filter = { isActive: true };
-  
+
   // Only show available properties by default
   if (status) {
     filter.status = status;
@@ -41,6 +41,23 @@ exports.getProperties = asyncHandler(async (req, res) => {
   // Location filters
   if (city) filter['location.city'] = city;
   if (area) filter['location.area'] = { $regex: area, $options: 'i' };
+
+  // Geospatial Search (Radius in km)
+  const { lat, lng, radius } = req.query;
+  if (lat && lng) {
+    const radiusInKm = parseFloat(radius) || 5; // Default 5km
+    const radiusInMeters = radiusInKm * 1000;
+
+    filter['location.coordinates'] = {
+      $near: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [parseFloat(lng), parseFloat(lat)]
+        },
+        $maxDistance: radiusInMeters
+      }
+    };
+  }
 
   // Price range filter
   if (minRent || maxRent) {
@@ -75,6 +92,9 @@ exports.getProperties = asyncHandler(async (req, res) => {
   // If text search, sort by relevance score
   if (search && search.trim()) {
     query = query.select({ score: { $meta: 'textScore' } }).sort({ score: { $meta: 'textScore' } });
+  } else if (lat && lng) {
+    // If geospatial search, do NOT apply explicit sort as $near sorts by distance
+    // and MongoDB throws error if we try to sort on top of $near
   } else {
     query = query.sort(sort);
   }
@@ -85,7 +105,23 @@ exports.getProperties = asyncHandler(async (req, res) => {
     .limit(parseInt(limit))
     .populate('owner', 'name phone photoURL rating totalRatings isVerified');
 
-  const total = await Property.countDocuments(filter);
+  // Create a separate filter for counting because $near is not supported in countDocuments
+  // $near implies sorting, which countDocuments doesn't support
+  const countFilter = { ...filter };
+
+  if (lat && lng) {
+    const radiusInKm = parseFloat(radius) || 5;
+    const radiusInRadians = radiusInKm / 6378.1; // Earth radius in km
+
+    // Replace $near with $geoWithin + $centerSphere for counting
+    countFilter['location.coordinates'] = {
+      $geoWithin: {
+        $centerSphere: [[parseFloat(lng), parseFloat(lat)], radiusInRadians]
+      }
+    };
+  }
+
+  const total = await Property.countDocuments(countFilter);
 
   res.status(200).json({
     success: true,
@@ -188,6 +224,21 @@ exports.createProperty = asyncHandler(async (req, res) => {
     }
   }
 
+  // Convert coordinates to [lng, lat] array if provided as object or array of objects
+  if (location && location.coordinates) {
+    let coords = location.coordinates;
+
+    // Handle case where coordinates is an array of objects [{latitude, longitude}]
+    if (Array.isArray(coords) && coords.length > 0 && typeof coords[0] === 'object') {
+      coords = coords[0];
+    }
+
+    // Convert {latitude, longitude} to [lng, lat]
+    if (!Array.isArray(coords) && coords.latitude && coords.longitude) {
+      location.coordinates = [parseFloat(coords.longitude), parseFloat(coords.latitude)];
+    }
+  }
+
   // Parse amenities if it's a string
   let amenities = req.body.amenities;
   if (typeof amenities === 'string') {
@@ -247,12 +298,12 @@ exports.updateProperty = asyncHandler(async (req, res) => {
   if (req.files && req.files.length > 0) {
     // Upload new images
     const newImageUrls = await uploadMultipleImages(req.files, 'gharbeti/properties');
-    
+
     // Delete old images (in background)
     deleteMultipleImages(property.images).catch(err => {
       console.error('Failed to delete old images:', err);
     });
-    
+
     imageUrls = newImageUrls;
   } else if (req.body.images) {
     // If images are provided as URLs
@@ -266,6 +317,21 @@ exports.updateProperty = asyncHandler(async (req, res) => {
       location = JSON.parse(location);
     } catch (e) {
       location = property.location;
+    }
+  }
+
+  // Convert coordinates to [lng, lat] array if provided as object or array of objects
+  if (location && location.coordinates) {
+    let coords = location.coordinates;
+
+    // Handle case where coordinates is an array of objects [{latitude, longitude}]
+    if (Array.isArray(coords) && coords.length > 0 && typeof coords[0] === 'object') {
+      coords = coords[0];
+    }
+
+    // Convert {latitude, longitude} to [lng, lat]
+    if (!Array.isArray(coords) && coords.latitude && coords.longitude) {
+      location.coordinates = [parseFloat(coords.longitude), parseFloat(coords.latitude)];
     }
   }
 
@@ -352,7 +418,7 @@ exports.getMyListings = asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 20, sort = '-createdAt' } = req.query;
 
   const filter = { owner: req.user._id };
-  
+
   if (status) {
     filter.status = status;
   }
