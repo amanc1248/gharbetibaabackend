@@ -13,17 +13,16 @@ const generateToken = (id) => {
   });
 };
 
+const otpService = require('../services/otp.service');
+
 /**
- * @desc    Phone Auth - Auto Login/Register
- * @route   POST /api/auth/phone
+ * @desc    Request OTP
+ * @route   POST /api/auth/request-otp
  * @access  Public
  */
-exports.phoneAuth = asyncHandler(async (req, res) => {
-  const { phone, name, role } = req.body;
+exports.requestOtp = asyncHandler(async (req, res) => {
+  const { phone, channel } = req.body;
 
-  console.log('📱 Phone auth request:', { phone, name, role });
-
-  // Validate required fields
   if (!phone) {
     return res.status(400).json({
       success: false,
@@ -31,13 +30,58 @@ exports.phoneAuth = asyncHandler(async (req, res) => {
     });
   }
 
+  // Use 'whatsapp' as default channel if not provided or invalid
+  const validChannel = ['whatsapp', 'viber'].includes(channel) ? channel : 'whatsapp';
+
+  const sent = await otpService.sendOtp(phone, validChannel);
+
+  if (sent) {
+    res.status(200).json({
+      success: true,
+      message: `OTP sent via ${validChannel}`,
+      channel: validChannel
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send OTP'
+    });
+  }
+});
+
+/**
+ * @desc    Verify OTP and Login/Register
+ * @route   POST /api/auth/verify-otp
+ * @access  Public
+ */
+exports.verifyOtp = asyncHandler(async (req, res) => {
+  const { phone, otp, name, role } = req.body;
+
+  if (!phone || !otp) {
+    return res.status(400).json({
+      success: false,
+      message: 'Phone number and OTP are required'
+    });
+  }
+
+  // 1. Verify OTP
+  const isValid = await otpService.verifyOtp(phone, otp);
+
+  if (!isValid) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid or expired OTP'
+    });
+  }
+
+  // 2. Verified! Proceed to Login/Register logic (Similar to old phoneAuth)
+  console.log(`✅ OTP Verified for ${phone}. Proceeding to auth.`);
+
   // Check if user exists with this phone number
   let user = await User.findOne({ phone });
 
   if (user) {
     // User exists - LOGIN
-    console.log('📱 User found - logging in');
-    
     // Check if account is active
     if (!user.isActive) {
       return res.status(403).json({
@@ -46,10 +90,7 @@ exports.phoneAuth = asyncHandler(async (req, res) => {
       });
     }
 
-    // Update last login
     await user.updateLastLogin();
-
-    // Generate token
     const token = generateToken(user._id);
 
     return res.status(200).json({
@@ -60,49 +101,48 @@ exports.phoneAuth = asyncHandler(async (req, res) => {
       user: user.getPublicProfile()
     });
   } else {
-    // User doesn't exist - REGISTER
-    console.log('📱 New user - registering');
+    // User doesn't exist - REGISTER (or partial register if name missing)
 
-    // Validate required fields for registration
-    if (!name || !role) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and role are required for new users'
-      });
-    }
+    // If name is not provided during verification, we might want to return isNewUser: true
+    // so frontend can show "Complete Profile" screen.
+    // However, the current frontend flow asks for name/role BEFORE OTP in some flows?
+    // Let's assume if name is missing we create a partial user OR return a specific flag.
 
-    // Generate email from phone if not provided
+    // Strategy: Create the user even if name is missing (using phone as name placeholder) 
+    // AND return isNewUser: true. The frontend should then redirect to "Complete Profile".
+
+    // Generate email from phone
     const email = `${phone.replace(/\+/g, '')}@gharbeti.app`;
-    
-    // Use phone as password (hashed by model)
-    const password = phone;
+    const password = phone; // temporary password
 
-    // Create new user
     user = await User.create({
-      name,
+      name: name || `User ${phone.slice(-4)}`, // Placeholder name
       email,
       password,
       phone,
-      role: role || 'tenant'
+      role: role || 'tenant',
+      isVerified: true // Phone Verified!
     });
 
-    console.log('📱 New user created:', user.phone);
-
-    // Update last login
     await user.updateLastLogin();
-
-    // Generate token
     const token = generateToken(user._id);
 
     return res.status(201).json({
       success: true,
-      message: 'Account created successfully',
+      message: 'Account verified and created',
       isNewUser: true,
       token,
       user: user.getPublicProfile()
     });
   }
 });
+
+// Keep old phoneAuth for backward compatibility but mark deprecated?
+// Or just comment it out. Let's keep it for now but the new implementation 
+// is handled above. Note: I am replacing the OLD phoneAuth export with these NEW ones.
+// If you want to keep 'phoneAuth' as a function name, I should preserve it.
+// But the plan says "Deprecate/Remove phoneAuth". So I will replace the export block.
+
 
 /**
  * @desc    Register new user
@@ -116,7 +156,7 @@ exports.signup = asyncHandler(async (req, res) => {
 
   // Check if user already exists
   const existingUser = await User.findOne({ email });
-  
+
   if (existingUser) {
     return res.status(400).json({
       success: false,
@@ -131,7 +171,7 @@ exports.signup = asyncHandler(async (req, res) => {
     password,
     role: role || 'tenant'
   };
-  
+
   // Add phone if provided
   if (phone) {
     userData.phone = phone;

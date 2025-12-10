@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const {
-  phoneAuth,
+  requestOtp,
+  verifyOtp,
   signup,
   signin,
   getMe,
@@ -21,11 +22,18 @@ const {
 // ====================================
 
 /**
- * @route   POST /api/auth/phone
- * @desc    Phone Auth - Auto Login/Register
+ * @route   POST /api/auth/request-otp
+ * @desc    Request OTP (channels: whatsapp, viber)
  * @access  Public
  */
-router.post('/phone', phoneAuth);
+router.post('/request-otp', requestOtp);
+
+/**
+ * @route   POST /api/auth/verify-otp
+ * @desc    Verify OTP and Login/Register
+ * @access  Public
+ */
+router.post('/verify-otp', verifyOtp);
 
 /**
  * @route   POST /api/auth/signup
