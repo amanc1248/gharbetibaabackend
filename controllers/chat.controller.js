@@ -69,12 +69,18 @@ exports.startConversation = asyncHandler(async (req, res) => {
         });
     }
 
-    // Check if conversation already exists (optional: specific to property or just between users)
-    // For now, let's allow multiple calls to return the same conversation if it exists
-    let conversation = await Conversation.findOne({
+    // Build query to find existing conversation
+    const query = {
         participants: { $all: [req.user.id, recipientId] }
-        // We could add propertyId check here if we want separate chats per property
-    });
+    };
+
+    // If propertyId is provided, look for property-specific conversation
+    // This allows separate chats per property between same users
+    if (propertyId) {
+        query.propertyId = propertyId;
+    }
+
+    let conversation = await Conversation.findOne(query);
 
     if (!conversation) {
         conversation = await Conversation.create({
@@ -88,8 +94,11 @@ exports.startConversation = asyncHandler(async (req, res) => {
         });
     }
 
-    // Populate for return
-    conversation = await conversation.populate('participants', 'name photoURL role');
+    // Populate participants and property details
+    conversation = await conversation.populate([
+        { path: 'participants', select: 'name photoURL role' },
+        { path: 'propertyId', select: 'title images location price owner' }
+    ]);
 
     res.status(200).json({
         success: true,
