@@ -13,12 +13,27 @@ dotenv.config();
 const authRoutes = require('./routes/auth.routes');
 const propertyRoutes = require('./routes/property.routes');
 const favoriteRoutes = require('./routes/favorite.routes');
-
-// Import error handler
 const errorHandler = require('./middleware/error.middleware');
+
+const http = require('http'); // Import http
+const { Server } = require('socket.io'); // Import Socket.io
+const socketService = require('./services/socket.service'); // Import Socket Service
 
 // Initialize Express app
 const app = express();
+const server = http.createServer(app); // Create HTTP server
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL || '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+// Initialize Socket Service
+socketService.init(io);
 
 // ====================================
 // MIDDLEWARE
@@ -71,6 +86,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 // ROUTES
 // ====================================
 
+// Import new Chat Routes
+const chatRoutes = require('./routes/chat.routes');
+
 // Health check route
 app.get('/', (req, res) => {
   res.json({
@@ -85,6 +103,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/chat', chatRoutes); // Register Chat Routes
 
 // 404 handler
 app.use((req, res) => {
@@ -103,7 +122,7 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => { // Use server.listen instead of app.listen
   console.log('');
   console.log('╔════════════════════════════════════════╗');
   console.log('║   🏠 GHARBETI API SERVER STARTED      ║');
@@ -118,6 +137,7 @@ app.listen(PORT, () => {
   console.log('  POST /api/auth/signup   - User registration');
   console.log('  POST /api/auth/signin   - User login');
   console.log('  GET  /api/properties    - Get all properties');
+  console.log('  GET  /api/chat/conversations - Get user chats');
   console.log('');
   console.log('Press CTRL+C to stop the server');
   console.log('');
