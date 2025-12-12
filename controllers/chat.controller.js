@@ -14,12 +14,29 @@ exports.getConversations = asyncHandler(async (req, res) => {
     })
         .populate('participants', 'name photoURL role')
         .populate('propertyId', 'title location price')
-        .sort({ 'lastMessage.createdAt': -1 });
+        .sort({ 'lastMessage.createdAt': -1 })
+        .lean(); // Convert to plain JS objects for modification
+
+    // Add unread count to each conversation
+    const conversationsWithUnread = await Promise.all(
+        conversations.map(async (conversation) => {
+            const unreadCount = await Message.countDocuments({
+                conversationId: conversation._id,
+                sender: { $ne: req.user.id }, // Not sent by current user
+                readBy: { $ne: req.user.id } // Not read by current user
+            });
+
+            return {
+                ...conversation,
+                unreadCount
+            };
+        })
+    );
 
     res.status(200).json({
         success: true,
-        count: conversations.length,
-        data: conversations
+        count: conversationsWithUnread.length,
+        data: conversationsWithUnread
     });
 });
 
@@ -51,6 +68,45 @@ exports.getMessages = asyncHandler(async (req, res) => {
         success: true,
         count: messages.length,
         data: messages
+    });
+});
+
+/**
+ * @desc    Mark messages as read
+ * @route   PUT /api/chat/:conversationId/read
+ * @access  Private
+ */
+exports.markMessagesAsRead = asyncHandler(async (req, res) => {
+    const { conversationId } = req.params;
+
+    // Verify user is participant
+    const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: req.user.id
+    });
+
+    if (!conversation) {
+        return res.status(404).json({
+            success: false,
+            message: 'Conversation not found or unauthorized'
+        });
+    }
+
+    // Update all messages in this conversation where user is not in readBy array
+    const result = await Message.updateMany(
+        {
+            conversationId: conversationId,
+            readBy: { $ne: req.user.id } // Not already read by this user
+        },
+        {
+            $addToSet: { readBy: req.user.id } // Add user to readBy array
+        }
+    );
+
+    res.status(200).json({
+        success: true,
+        message: 'Messages marked as read',
+        modifiedCount: result.modifiedCount
     });
 });
 
