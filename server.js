@@ -88,6 +88,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // Import new Chat Routes
 const chatRoutes = require('./routes/chat.routes');
+const settingsRoutes = require('./routes/settings.routes');
 
 // Health check route
 app.get('/', (req, res) => {
@@ -104,6 +105,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertyRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/chat', chatRoutes); // Register Chat Routes
+app.use('/api/settings', settingsRoutes); // Register Settings Routes
 
 // 404 handler
 app.use((req, res) => {
