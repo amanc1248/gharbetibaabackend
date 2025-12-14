@@ -13,7 +13,7 @@ exports.getConversations = asyncHandler(async (req, res) => {
         participants: req.user.id
     })
         .populate('participants', 'name photoURL role')
-        .populate('propertyId', 'title location price')
+        .populate('propertyId', 'title description propertyType location rent images status isActive')
         .sort({ 'lastMessage.createdAt': -1 })
         .lean(); // Convert to plain JS objects for modification
 
@@ -153,7 +153,7 @@ exports.startConversation = asyncHandler(async (req, res) => {
     // Populate participants and property details
     conversation = await conversation.populate([
         { path: 'participants', select: 'name photoURL role' },
-        { path: 'propertyId', select: 'title images location price owner' }
+        { path: 'propertyId', select: 'title description propertyType location rent images status isActive amenities' }
     ]);
 
     res.status(200).json({
