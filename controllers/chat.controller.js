@@ -48,11 +48,13 @@ exports.getConversations = asyncHandler(async (req, res) => {
 exports.getMessages = asyncHandler(async (req, res) => {
     const { conversationId } = req.params;
 
-    // Verify user is participant
+    // Verify user is participant and populate property
     const conversation = await Conversation.findOne({
         _id: conversationId,
         participants: req.user.id
-    });
+    })
+        .populate('propertyId', 'title description propertyType location rent images status isActive amenities')
+        .lean();
 
     if (!conversation) {
         return res.status(404).json({
@@ -67,7 +69,8 @@ exports.getMessages = asyncHandler(async (req, res) => {
     res.status(200).json({
         success: true,
         count: messages.length,
-        data: messages
+        data: messages,
+        conversation: conversation // Include conversation with property
     });
 });
 
